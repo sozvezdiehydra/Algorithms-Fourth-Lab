@@ -36,14 +36,14 @@ namespace Lab4
             // Настройка категорий и осей для вертикальных столбцов
             _plotModel.Axes.Add(new CategoryAxis
             {
-                Position = AxisPosition.Left,  // CategoryAxis should be on the Y-axis (for categories)
+                Position = AxisPosition.Left, 
                 Key = "Categories",
                 ItemsSource = new List<string>() // Заглушка, обновится динамически
             });
 
             _plotModel.Axes.Add(new LinearAxis
             {
-                Position = AxisPosition.Bottom, // LinearAxis should be on the X-axis (for values)
+                Position = AxisPosition.Bottom,
                 Minimum = 0
             });
 
@@ -73,7 +73,6 @@ namespace Lab4
                 return;
             }
 
-            // Обновление данных в зависимости от выбранного атрибута
             barSeries.ItemsSource = _dataRecord.ConvertAll(record =>
             {
                 return new BarItem
@@ -106,13 +105,11 @@ namespace Lab4
             _plotModel.InvalidatePlot(true);
         }
 
-        // Преобразование строки в число (например, длина строки или ASCII-код)
         private double ConvertToDouble(string text)
         {
             if (string.IsNullOrEmpty(text))
                 return 0;
 
-            // Например, используем длину строки
             return text.Length;
         }
 
@@ -125,8 +122,10 @@ namespace Lab4
 
         private void Log(string message)
         {
-            Logs.AppendText(message + "\n");
-            Logs.ScrollToEnd();
+            string newLog = $"{message}\n";
+            Logs.Text = newLog + Logs.Text;
+            /*Logs.AppendText(message + "\n");
+            Logs.ScrollToEnd();*/
         }
 
         
@@ -155,8 +154,8 @@ namespace Lab4
 
             try
             {
-                var lines = File.ReadAllLines(filePath, Encoding.UTF8); // Убедитесь, что используете правильную кодировку
-                foreach (var line in lines.Skip(1)) // Пропускаем заголовок
+                var lines = File.ReadAllLines(filePath, Encoding.UTF8);
+                foreach (var line in lines.Skip(1))
                 {
                     // Пропускаем пустые строки
                     if (string.IsNullOrWhiteSpace(line))
@@ -174,10 +173,10 @@ namespace Lab4
                         {
                             var record = new Record
                             {
-                                Country = columns[0].Trim(), // Убираем лишние пробелы
+                                Country = columns[0].Trim(),
                                 Continent = columns[1].Trim(),
                                 Capital = columns[2].Trim(),
-                                Area = double.Parse(columns[3].Trim(), CultureInfo.InvariantCulture), // Преобразуем строку в число с учетом культуры
+                                Area = double.Parse(columns[3].Trim(), CultureInfo.InvariantCulture),
                                 Population = (int)long.Parse(columns[4].Trim())
                             };
 
@@ -212,6 +211,8 @@ namespace Lab4
             var left = data.Take(mid).ToList();
             var right = data.Skip(mid).ToList();
 
+            Log($"Splitting: Left={left.Count}, Right={right.Count}");
+
             // Рекурсивно сортируем каждую половину
             await DirectMergeSort(left, keySelector);
             await DirectMergeSort(right, keySelector);
@@ -221,9 +222,12 @@ namespace Lab4
             data.Clear();
             data.AddRange(merged);
 
-            UpdatePlot();  // Обновление графика на каждом шаге
-            await Task.Delay(_delay);  // Задержка
+            Log($"Merging: {string.Join(", ", merged.Select(r => keySelector(r)))}");
+
+            UpdatePlot();
+            await Task.Delay(_delay);
         }
+
 
         private List<Record> Merge(List<Record> left, List<Record> right, Func<Record, IComparable> keySelector)
         {
@@ -262,6 +266,8 @@ namespace Lab4
                 var runs = new List<List<Record>>();
                 var currentRun = new List<Record> { data[0] };
 
+                Log("Creating natural runs...");
+
                 // Разбиваем данные на естественные подпоследовательности
                 for (int i = 1; i < data.Count; i++)
                 {
@@ -272,25 +278,31 @@ namespace Lab4
                     else
                     {
                         runs.Add(currentRun);
+                        Log($"Run: {string.Join(", ", currentRun.Select(r => keySelector(r)))}");
                         currentRun = new List<Record> { data[i] };
                         sorted = false;
                     }
                 }
 
                 runs.Add(currentRun);
+                Log($"Run: {string.Join(", ", currentRun.Select(r => keySelector(r)))}");
 
                 if (runs.Count > 1)
                 {
+                    Log("Merging runs...");
                     // Объединяем последовательности
                     var mergedData = MergeRuns(runs, keySelector);
                     data.Clear();
                     data.AddRange(mergedData);
 
-                    UpdatePlot(); // Обновление графика
-                    await Task.Delay(_delay); // Задержка
+                    Log($"Merged data: {string.Join(", ", data.Select(r => keySelector(r)))}");
+
+                    UpdatePlot();
+                    await Task.Delay(_delay);
                 }
             }
         }
+
 
         private List<Record> MergeRuns(List<List<Record>> runs, Func<Record, IComparable> keySelector)
         {
@@ -307,28 +319,37 @@ namespace Lab4
             if (data.Count <= 1)
                 return;
 
+            Log($"Splitting data into {k} partitions...");
+
             // Разбиваем данные на k частей
             var partitions = new List<List<Record>>();
             int partitionSize = (int)Math.Ceiling((double)data.Count / k);
             for (int i = 0; i < data.Count; i += partitionSize)
             {
                 partitions.Add(data.Skip(i).Take(partitionSize).ToList());
+                Log($"Partition {partitions.Count}: {string.Join(", ", partitions.Last().Select(r => keySelector(r)))}");
             }
 
             // Рекурсивно сортируем каждую часть
             foreach (var partition in partitions)
             {
                 await DirectMergeSort(partition, keySelector);
+                Log($"Sorted Partition: {string.Join(", ", partition.Select(r => keySelector(r)))}");
             }
+
+            Log("Merging partitions...");
 
             // Объединяем k частей
             var mergedData = KWayMerge(partitions, keySelector);
             data.Clear();
             data.AddRange(mergedData);
 
-            UpdatePlot(); // Обновление графика
-            await Task.Delay(_delay); // Задержка
+            Log($"Merged data: {string.Join(", ", data.Select(r => keySelector(r)))}");
+
+            UpdatePlot();
+            await Task.Delay(_delay);
         }
+
 
         private List<Record> KWayMerge(List<List<Record>> partitions, Func<Record, IComparable> keySelector)
         {
@@ -445,7 +466,6 @@ namespace Lab4
                     return;
             }
 
-            // После сортировки можно записать результат в файл
             var saveFileDialog = new Microsoft.Win32.SaveFileDialog
             {
                 Filter = "Text Files (*.txt)|*.txt|All Files (*.*)|*.*",

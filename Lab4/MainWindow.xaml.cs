@@ -65,28 +65,33 @@ namespace Lab4
             PlotView.Model = _plotModel;
         }
 
-        private void UpdatePlot()
+        private void UpdatePlot(List<int> highlightIndices = null, List<OxyColor> highlightColors = null, List<int> sortedIndices = null)
         {
             var barSeries = (BarSeries)_plotModel.Series[0];
 
             // Обновление данных
-            barSeries.ItemsSource = _data.ConvertAll(value => new BarItem { Value = value });
-            //barSeries.ItemsSource = _dataRecord.ConvertAll(record => new BarItem { Value = record.Population });
+            barSeries.ItemsSource = _data.Select((value, index) =>
+                new BarItem
+                {
+                    Value = value,
+                    Color = sortedIndices != null && sortedIndices.Contains(index)
+                        ? OxyColors.Gray // Цвет для отсортированных элементов
+                        : (highlightIndices != null && highlightIndices.Contains(index)
+                            ? highlightColors[highlightIndices.IndexOf(index)]
+                            : OxyColors.SkyBlue) // Цвет по умолчанию
+                }).ToList();
 
             // Обновление категорий
             var categoryAxis = _plotModel.Axes[0] as CategoryAxis;
             if (categoryAxis != null)
             {
-                var categories = new List<string>();
-                for (int i = 0; i < _data.Count; i++)
-                {
-                    categories.Add(i.ToString());
-                }
-                categoryAxis.ItemsSource = categories;
+                categoryAxis.ItemsSource = Enumerable.Range(0, _data.Count).Select(i => i.ToString()).ToList();
             }
 
             _plotModel.InvalidatePlot(true);
         }
+
+
 
         private async Task SortWithSteps(Func<Task> sortAlgorithm)
         {
@@ -97,61 +102,98 @@ namespace Lab4
 
         private void Log(string message)
         {
-            Logs.AppendText(message + "\n");
-            Logs.ScrollToEnd();
+            string newLog = $"{message}\n";
+            Logs.Text = newLog + Logs.Text;
+            /*Logs.AppendText(message + "\n");
+            Logs.ScrollToEnd();*/
         }
 
         private async Task BubbleSort()
         {
+            var sortedIndices = new List<int>();
             for (int i = 0; i < _data.Count - 1; i++)
             {
                 for (int j = 0; j < _data.Count - i - 1; j++)
                 {
+                    // Подсветка сравниваемых элементов
+                    UpdatePlot(new List<int> { j, j + 1 }, new List<OxyColor> { OxyColors.Red, OxyColors.Orange }, sortedIndices);
                     Log($"Compare {_data[j]} and {_data[j + 1]}");
+                    await Task.Delay(_delay);
+
                     if (_data[j] > _data[j + 1])
                     {
+                        // Подсветка обмениваемых элементов
                         Log($"Swap {_data[j]} and {_data[j + 1]}");
                         (_data[j], _data[j + 1]) = (_data[j + 1], _data[j]);
-                        UpdatePlot();
+                        UpdatePlot(new List<int> { j, j + 1 }, new List<OxyColor> { OxyColors.Green, OxyColors.Yellow }, sortedIndices);
                         await Task.Delay(_delay);
                     }
+
+                    UpdatePlot(null, null, sortedIndices);
                 }
+
+                sortedIndices.Add(_data.Count - 1 - i);
             }
+
+            sortedIndices.Add(0);
+            UpdatePlot(null, null, sortedIndices);
         }
+
+
 
 
         private async Task InsertSort()
         {
+            var sortedIndices = new List<int>();
             for (int i = 1; i < _data.Count; i++)
             {
                 var key = _data[i];
                 int j = i - 1;
 
+                // Подсветка текущего ключа
+                UpdatePlot(new List<int> { i }, new List<OxyColor> { OxyColors.Orange }, sortedIndices);
+                Log($"Key: {key}");
+                await Task.Delay(_delay);
+
                 while (j >= 0 && _data[j] > key)
                 {
+                    // Подсветка сравниваемого элемента
+                    UpdatePlot(new List<int> { j, j + 1 }, new List<OxyColor> { OxyColors.Red, OxyColors.Yellow }, sortedIndices);
                     Log($"Move {_data[j]} to position {j + 1}");
                     _data[j + 1] = _data[j];
                     j--;
-                    UpdatePlot();
+                    UpdatePlot(null, null, sortedIndices);
                     await Task.Delay(_delay);
                 }
 
+                // Подсветка вставки
                 Log($"Insert {key} at position {j + 1}");
                 _data[j + 1] = key;
-                UpdatePlot();
+                UpdatePlot(new List<int> { j + 1 }, new List<OxyColor> { OxyColors.Green }, sortedIndices);
                 await Task.Delay(_delay);
+
+                sortedIndices.Add(j + 1);
+
+                UpdatePlot(null, null, sortedIndices);
             }
         }
 
+
+
         private async Task QuickSort(int low, int high)
         {
+            var sortedIndices = new List<int>();
             if (low < high)
             {
                 int pi = await Partition(low, high);
 
+                sortedIndices.Add(pi);
+
                 await QuickSort(low, pi - 1);
                 await QuickSort(pi + 1, high);
             }
+
+            UpdatePlot(null, null, sortedIndices);
         }
 
         private async Task<int> Partition(int low, int high)
@@ -160,50 +202,70 @@ namespace Lab4
             Log($"Pivot: {pivot}");
             int i = low - 1;
 
+            // Подсветка опорного элемента
+            UpdatePlot(new List<int> { high }, new List<OxyColor> { OxyColors.Blue }, null);
+            await Task.Delay(_delay);
+
             for (int j = low; j < high; j++)
             {
+                // Подсветка текущего элемента
+                UpdatePlot(new List<int> { j, high }, new List<OxyColor> { OxyColors.Red, OxyColors.Blue }, null);
                 Log($"Compare {_data[j]} and {pivot}");
+                await Task.Delay(_delay);
+
                 if (_data[j] < pivot)
                 {
                     i++;
+                    // Подсветка элементов, которые меняются местами
                     Log($"Swap {_data[i]} and {_data[j]}");
+                    UpdatePlot(new List<int> { i, j }, new List<OxyColor> { OxyColors.Green, OxyColors.Green }, null);
                     (_data[i], _data[j]) = (_data[j], _data[i]);
-                    UpdatePlot();
                     await Task.Delay(_delay);
                 }
             }
 
+            // Подсветка обмена
             Log($"Swap {_data[i + 1]} and {pivot}");
             (_data[i + 1], _data[high]) = (_data[high], _data[i + 1]);
-            UpdatePlot();
+            UpdatePlot(new List<int> { i + 1, high }, new List<OxyColor> { OxyColors.Green, OxyColors.Green }, null);
             await Task.Delay(_delay);
+
+            // Сброс цвета
+            UpdatePlot(null, null, null);
             return i + 1;
         }
+
+
 
         private async Task HeapSort()
         {
             int n = _data.Count;
+            var sortedIndices = new List<int>();
 
             for (int i = n / 2 - 1; i >= 0; i--)
             {
-                await Heapify(n, i);
+                await Heapify(n, i, sortedIndices);
             }
 
             for (int i = n - 1; i > 0; i--)
             {
                 Log($"Swap {_data[0]} and {_data[i]}");
                 (_data[0], _data[i]) = (_data[i], _data[0]);
-                UpdatePlot();
+                UpdatePlot(null, null, sortedIndices);
                 await Task.Delay(_delay);
-                await Heapify(i, 0);
+                await Heapify(i, 0, sortedIndices);
             }
         }
 
-        private async Task Heapify(int n, int i)
+        private async Task Heapify(int n, int i, List<int> sortedIndices)
         {
             int largest = i;
             int left = 2 * i + 1;
             int right = 2 * i + 2;
+
+            // Подсветка текущего узла
+            UpdatePlot(new List<int> { i }, new List<OxyColor> { OxyColors.Blue }, sortedIndices);
+            await Task.Delay(_delay);
 
             if (left < n && _data[left] > _data[largest])
             {
@@ -219,13 +281,25 @@ namespace Lab4
 
             if (largest != i)
             {
+                // Подсветка обмена
                 Log($"Swap {_data[i]} and {_data[largest]}");
+                UpdatePlot(new List<int> { i, largest }, new List<OxyColor> { OxyColors.Green, OxyColors.Green }, sortedIndices);
                 (_data[i], _data[largest]) = (_data[largest], _data[i]);
-                UpdatePlot();
                 await Task.Delay(_delay);
-                await Heapify(n, largest);
+
+                await Heapify(n, largest, sortedIndices);
             }
+
+            // Добавляем элемент в отсортированные
+            if (i == n - 1)
+            {
+                sortedIndices.Add(i);
+            }
+
+            UpdatePlot(null, null, sortedIndices);
         }
+
+
 
         private async void StartSorting_Click(object sender, RoutedEventArgs e)
         {
@@ -291,10 +365,10 @@ namespace Lab4
                     await SortWithSteps(() => DirectMergeSort(_dataRecord, keySelector));
                     break;
                 case "Natural Merge Sort":
-                    //await SortWithSteps(() => NaturalMergeSort(_data, keySelector));  // Реализуйте этот метод
+                    //await SortWithSteps(() => NaturalMergeSort(_data, keySelector));
                     break;
                 case "K-Way Merge Sort":
-                    //await SortWithSteps(() => KWayMergeSort(_data, keySelector));  // Реализуйте этот метод
+                    //await SortWithSteps(() => KWayMergeSort(_data, keySelector));
                     break;*/
 
                 // Алгоритмы сортировки
@@ -356,8 +430,8 @@ namespace Lab4
 
             try
             {
-                var lines = File.ReadAllLines(filePath, Encoding.UTF8); // Убедитесь, что используете правильную кодировку
-                foreach (var line in lines.Skip(1)) // Пропускаем заголовок
+                var lines = File.ReadAllLines(filePath, Encoding.UTF8);
+                foreach (var line in lines.Skip(1))
                 {
                     // Пропускаем пустые строки
                     if (string.IsNullOrWhiteSpace(line))
@@ -375,10 +449,10 @@ namespace Lab4
                         {
                             var record = new Record
                             {
-                                Country = columns[0].Trim(), // Убираем лишние пробелы
+                                Country = columns[0].Trim(),
                                 Continent = columns[1].Trim(),
                                 Capital = columns[2].Trim(),
-                                Area = double.Parse(columns[3].Trim(), CultureInfo.InvariantCulture), // Преобразуем строку в число с учетом культуры
+                                Area = double.Parse(columns[3].Trim(), CultureInfo.InvariantCulture),
                                 Population = (int)long.Parse(columns[4].Trim())
                             };
 
@@ -466,8 +540,8 @@ namespace Lab4
         private void OpenThirdWindowButton_Click(object sender, RoutedEventArgs e)
         {
             SortingWordsWindow secondWindow = new SortingWordsWindow();
-            secondWindow.Show(); // Показывает окно немодально
-            // secondWindow.ShowDialog(); // Показывает окно модально
+            secondWindow.Show();
+            // secondWindow.ShowDialog(); 
         }
     }
 }
